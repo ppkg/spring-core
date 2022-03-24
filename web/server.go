@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/go-spring/spring-base/cast"
@@ -29,6 +30,11 @@ import (
 	"github.com/go-spring/spring-base/log"
 	"github.com/go-spring/spring-base/util"
 	"github.com/go-spring/spring-core/internal"
+	"github.com/go-spring/spring-core/web/option"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
+	"google.golang.org/grpc"
+	g "google.golang.org/grpc"
 )
 
 // HandlerFunc 标准 Web 处理函数
@@ -97,6 +103,9 @@ type Server interface {
 
 	// Static 定义一组文件资源
 	Static(prefix string, root string)
+
+	// 设置grpc组件
+	SetupGrpc(func(svr *g.Server))
 }
 
 type ServerHandler interface {
@@ -118,6 +127,10 @@ type server struct {
 	errHandler ErrorHandler // 错误处理接口
 
 	swagger Swagger // Swagger根
+
+	grpc          *g.Server
+	setupGrpcFunc func(svc *grpc.Server)
+	option        *option.GrpcOption `autowire:"?"`
 }
 
 // NewServer server 的构造函数
@@ -227,6 +240,8 @@ func (s *server) prepare() error {
 
 // Start 启动 web 服务器
 func (s *server) Start() (err error) {
+	s.setupGrpcFunc(s.grpc)
+
 	if err = s.prepare(); err != nil {
 		return err
 	}
@@ -234,7 +249,7 @@ func (s *server) Start() (err error) {
 		return err
 	}
 	s.server = &http.Server{
-		Handler:      s,
+		Handler:      s.grpcHandlerFunc(),
 		Addr:         s.Address(),
 		ReadTimeout:  time.Duration(s.config.ReadTimeout) * time.Millisecond,
 		WriteTimeout: time.Duration(s.config.WriteTimeout) * time.Millisecond,
@@ -247,6 +262,27 @@ func (s *server) Start() (err error) {
 	}
 	log.Infof("http server stopped on %s return %s", s.Address(), cast.ToString(err))
 	return err
+}
+
+// 设置grpc组件
+func (s *server) SetupGrpc(fn func(svr *g.Server)) {
+	var ops []g.ServerOption
+	if s.option != nil {
+		ops = s.option.ServerOptions
+	}
+	s.grpc = g.NewServer(ops...)
+
+	s.setupGrpcFunc = fn
+}
+
+func (s *server) grpcHandlerFunc() http.Handler {
+	return h2c.NewHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ProtoMajor == 2 && strings.Contains(r.Header.Get("Content-Type"), "application/grpc") {
+			s.grpc.ServeHTTP(w, r)
+		} else {
+			s.ServeHTTP(w, r)
+		}
+	}), &http2.Server{})
 }
 
 // Stop 停止 web 服务器
