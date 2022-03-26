@@ -278,10 +278,8 @@ func (s *server) SetupGrpc(fn func(svr *g.Server)) {
 func (s *server) grpcHandlerFunc() http.Handler {
 	return h2c.NewHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.ProtoMajor == 2 && strings.Contains(r.Header.Get("Content-Type"), "application/grpc") {
-			log.Info("正在访问grpc....")
 			s.grpcServer.ServeHTTP(w, r)
 		} else {
-			log.Info("正在访问http....")
 			s.ServeHTTP(w, r)
 		}
 	}), &http2.Server{})
