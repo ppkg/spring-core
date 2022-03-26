@@ -287,6 +287,8 @@ func (s *server) grpcHandlerFunc() http.Handler {
 
 // Stop 停止 web 服务器
 func (s *server) Stop(ctx context.Context) error {
+	// 关闭grpc服务
+	s.grpcServer.GracefulStop()
 	return s.server.Shutdown(ctx)
 }
 
