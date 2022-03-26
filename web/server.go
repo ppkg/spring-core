@@ -130,7 +130,7 @@ type server struct {
 
 	grpcServer        *g.Server
 	setupGrpcFunc     func(svc *grpc.Server)
-	grpcServerOptions option.GrpcServerOptions `autowire:"?"`
+	grpcServerOptions *option.GrpcServerOptions `autowire:"?"`
 }
 
 // NewServer server 的构造函数
@@ -267,8 +267,8 @@ func (s *server) Start() (err error) {
 // 设置grpc组件
 func (s *server) SetupGrpc(fn func(svr *g.Server)) {
 	var opts []g.ServerOption
-	if len(s.grpcServerOptions) > 0 {
-		opts = append(opts, s.grpcServerOptions...)
+	if len(s.grpcServerOptions.Options) > 0 {
+		opts = append(opts, s.grpcServerOptions.Options...)
 	}
 	s.grpcServer = g.NewServer(opts...)
 
