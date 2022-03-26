@@ -128,9 +128,9 @@ type server struct {
 
 	swagger Swagger // Swagger根
 
-	grpc          *g.Server
-	setupGrpcFunc func(svc *grpc.Server)
-	option        *option.GrpcOption `autowire:"?"`
+	grpcServer        *g.Server
+	setupGrpcFunc     func(svc *grpc.Server)
+	grpcServerOptions option.GrpcServerOptions `autowire:"?"`
 }
 
 // NewServer server 的构造函数
@@ -240,7 +240,7 @@ func (s *server) prepare() error {
 
 // Start 启动 web 服务器
 func (s *server) Start() (err error) {
-	s.setupGrpcFunc(s.grpc)
+	s.setupGrpcFunc(s.grpcServer)
 
 	if err = s.prepare(); err != nil {
 		return err
@@ -266,11 +266,11 @@ func (s *server) Start() (err error) {
 
 // 设置grpc组件
 func (s *server) SetupGrpc(fn func(svr *g.Server)) {
-	var ops []g.ServerOption
-	if s.option != nil {
-		ops = s.option.ServerOptions
+	var opts []g.ServerOption
+	if len(s.grpcServerOptions) > 0 {
+		opts = append(opts, s.grpcServerOptions...)
 	}
-	s.grpc = g.NewServer(ops...)
+	s.grpcServer = g.NewServer(opts...)
 
 	s.setupGrpcFunc = fn
 }
@@ -278,7 +278,7 @@ func (s *server) SetupGrpc(fn func(svr *g.Server)) {
 func (s *server) grpcHandlerFunc() http.Handler {
 	return h2c.NewHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.ProtoMajor == 2 && strings.Contains(r.Header.Get("Content-Type"), "application/grpc") {
-			s.grpc.ServeHTTP(w, r)
+			s.grpcServer.ServeHTTP(w, r)
 		} else {
 			s.ServeHTTP(w, r)
 		}
